@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Course Registration</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="top">
+  <div><h1>Course Registration</h1><p id="who"></p></div>
+  <button class="ghost" id="logout">Log out</button>
+</header>
+<main>
+  <nav id="tabs"></nav>
+  <p id="msg" class="msg"></p>
+
+  <section id="courses-tab">
+    <h2>Courses</h2>
+    <form id="course-form" class="grid" hidden>
+      <label>Code <input id="code" required></label>
+      <label>Title <input id="title" required></label>
+      <label>Credits <input id="credits" type="number" min="1" required></label>
+      <label>Capacity <input id="capacity" type="number" min="1" required></label>
+      <div><button type="submit" id="save">Add course</button> <button type="button" class="ghost" id="cancel" hidden>Cancel</button></div>
+    </form>
+    <div class="bar">
+      <input id="search" placeholder="Search by code or title">
+      <select id="sortBy"><option value="code">Sort: Code</option><option value="title">Sort: Title</option><option value="credits">Sort: Credits</option><option value="capacity">Sort: Capacity</option></select>
+      <select id="direction"><option value="asc">Ascending</option><option value="desc">Descending</option></select>
+      <select id="size"><option>5</option><option>10</option><option>20</option></select>
+    </div>
+    <div class="wrap"><table><thead><tr><th>Code</th><th>Title</th><th>Credits</th><th>Seats</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+    <p id="empty" class="empty" hidden>No courses found.</p>
+    <div class="pager"><button class="ghost" id="prev">Previous</button><span id="info"></span><button class="ghost" id="next">Next</button></div>
+  </section>
+
+  <section id="mine-tab" hidden>
+    <h2>My registered courses</h2>
+    <div class="wrap"><table><thead><tr><th>Code</th><th>Title</th><th>Credits</th><th>Registered on</th></tr></thead><tbody id="mine"></tbody></table></div>
+    <p id="mine-empty" class="empty" hidden>You have not registered for any course yet.</p>
+  </section>
+
+  <section id="students-tab" hidden>
+    <h2>Students</h2>
+    <div class="wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Username</th><th>Registered courses</th></tr></thead><tbody id="students"></tbody></table></div>
+    <div class="pager"><button class="ghost" id="sprev">Previous</button><span id="sinfo"></span><button class="ghost" id="snext">Next</button></div>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+let me, isAdmin, enrolled = new Set(), cache = {}, editingId = null, page = 0, spage = 0;
+
+async function api(url, opt) {
+  const r = await fetch(url, opt);
+  if (r.status === 401) { location.href = "/login.html"; throw new Error("Please log in"); }
+  if (r.status === 403) throw new Error("You do not have permission to do this");
+  const d = r.status === 204 ? null : await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error((d && (d.error || Object.values(d).join(", "))) || "Something went wrong");
+  return d;
+}
+function say(text, type) { $("msg").textContent = text; $("msg").className = "msg " + (text ? type : ""); }
+const guard = fn => async (...a) => { try { await fn(...a); } catch (e) { say(e.message, "error"); } };
+
+function showTab(name) {
+  ["courses", "mine", "students"].forEach(t => $(t + "-tab").hidden = t !== name);
+  [...$("tabs").children].forEach(b => b.classList.toggle("on", b.dataset.tab === name));
+  if (name === "mine") loadMine(); if (name === "students") loadStudents();
+}
+
+const loadCourses = guard(async () => {
+  const p = new URLSearchParams({ page, size: $("size").value, sortBy: $("sortBy").value, direction: $("direction").value, q: $("search").value.trim() });
+  const d = await api("/api/courses?" + p);
+  cache = {}; d.content.forEach(c => cache[c.id] = c);
+  $("rows").innerHTML = d.content.map(c => `<tr><td>${esc(c.code)}</td><td>${esc(c.title)}</td><td>${c.credits}</td><td>${c.enrolled}/${c.capacity}</td><td class="actions">${actions(c)}</td></tr>`).join("");
+  $("empty").hidden = d.content.length > 0;
+  $("info").textContent = `Page ${d.number + 1} of ${Math.max(d.totalPages, 1)} (${d.totalElements} courses)`;
+  $("prev").disabled = d.first; $("next").disabled = d.last;
+});
+function actions(c) {
+  if (isAdmin) return `<button class="ghost" onclick="editCourse(${c.id})">Edit</button><button class="danger" onclick="delCourse(${c.id})">Delete</button>`;
+  if (enrolled.has(c.id)) return `<button class="danger" onclick="drop(${c.id})">Drop</button>`;
+  const full = c.enrolled >= c.capacity;
+  return `<button onclick="enroll(${c.id})" ${full ? "disabled" : ""}>${full ? "Full" : "Register"}</button>`;
+}
+async function refreshMine() {
+  if (isAdmin) return;
+  const list = await api("/api/enrollments/my");
+  enrolled = new Set(list.map(e => e.courseId));
+  return list;
+}
+const loadMine = guard(async () => {
+  const list = await refreshMine();
+  $("mine").innerHTML = list.map(e => `<tr><td>${esc(e.code)}</td><td>${esc(e.title)}</td><td>${e.credits}</td><td>${e.enrolledOn}</td></tr>`).join("");
+  $("mine-empty").hidden = list.length > 0;
+});
+const loadStudents = guard(async () => {
+  const d = await api(`/api/students?page=${spage}&size=5&sortBy=fullName&direction=asc`);
+  $("students").innerHTML = d.content.map(s => `<tr><td>${esc(s.fullName)}</td><td>${esc(s.email)}</td><td>${esc(s.username)}</td><td>${s.courses ? s.courses + ": " + esc(s.courseCodes.join(", ")) : "None"}</td></tr>`).join("");
+  $("sinfo").textContent = `Page ${d.number + 1} of ${Math.max(d.totalPages, 1)}`;
+  $("sprev").disabled = d.first; $("snext").disabled = d.last;
+});
+
+const enroll = guard(async id => { await api("/api/enrollments/" + id, { method: "POST" }); say("Registered successfully", "ok"); await refreshMine(); loadCourses(); });
+const drop = guard(async id => { await api("/api/enrollments/" + id, { method: "DELETE" }); say("Course dropped", "ok"); await refreshMine(); loadCourses(); });
+const delCourse = guard(async id => { if (!confirm("Delete this course?")) return; await api("/api/courses/" + id, { method: "DELETE" }); say("Course deleted", "ok"); loadCourses(); });
+function editCourse(id) {
+  const c = cache[id]; editingId = id;
+  $("code").value = c.code; $("title").value = c.title; $("credits").value = c.credits; $("capacity").value = c.capacity;
+  $("save").textContent = "Update course"; $("cancel").hidden = false; window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function resetForm() { editingId = null; $("course-form").reset(); $("save").textContent = "Add course"; $("cancel").hidden = true; }
+$("cancel").onclick = resetForm;
+$("course-form").addEventListener("submit", guard(async ev => {
+  ev.preventDefault();
+  const body = { code: $("code").value, title: $("title").value, credits: Number($("credits").value), capacity: Number($("capacity").value) };
+  await api("/api/courses" + (editingId ? "/" + editingId : ""), { method: editingId ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  say(editingId ? "Course updated" : "Course added", "ok"); resetForm(); loadCourses();
+}));
+
+let t; $("search").oninput = () => { clearTimeout(t); t = setTimeout(() => { page = 0; loadCourses(); }, 250); };
+["sortBy", "direction", "size"].forEach(id => $(id).onchange = () => { page = 0; loadCourses(); });
+$("prev").onclick = () => { page--; loadCourses(); }; $("next").onclick = () => { page++; loadCourses(); };
+$("sprev").onclick = () => { spage--; loadStudents(); }; $("snext").onclick = () => { spage++; loadStudents(); };
+$("logout").onclick = async () => { await fetch("/logout", { method: "POST" }); location.href = "/login.html"; };
+
+(async function init() {
+  try {
+    me = await api("/api/me"); isAdmin = me.role === "ADMIN";
+    $("who").textContent = `${me.fullName} (${isAdmin ? "Admin" : "Student"})`;
+    const tabs = [["courses", "Courses"]].concat(isAdmin ? [["students", "Students"]] : [["mine", "My courses"]]);
+    $("tabs").innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}">${l}</button>`).join("");
+    [...$("tabs").children].forEach(b => b.onclick = () => showTab(b.dataset.tab));
+    $("course-form").hidden = !isAdmin;
+    await refreshMine(); showTab("courses"); loadCourses();
+  } catch (e) { say(e.message, "error"); }
+})();
+</script>
+</body>
+</html>

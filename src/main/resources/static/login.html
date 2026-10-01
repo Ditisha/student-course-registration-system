@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in - Course Registration</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="auth">
+  <h1>Course Registration</h1>
+  <p>Log in to continue</p>
+  <p id="msg" class="msg"></p>
+  <form class="stack" method="post" action="/login">
+    <label>Username <input name="username" required autofocus></label>
+    <label>Password <input name="password" type="password" required></label>
+    <button type="submit">Log in</button>
+  </form>
+  <p style="margin-top:14px">New student? <a href="/register.html">Create an account</a></p>
+</div>
+<script>
+  const q = new URLSearchParams(location.search), m = document.getElementById("msg");
+  if (q.has("error")) { m.textContent = "Invalid username or password"; m.className = "msg error"; }
+  if (q.has("registered")) { m.textContent = "Account created. You can log in now."; m.className = "msg ok"; }
+</script>
+</body>
+</html>

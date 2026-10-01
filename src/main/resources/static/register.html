@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Register - Course Registration</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="auth">
+  <h1>Student sign up</h1>
+  <p>Create an account to register for courses</p>
+  <p id="msg" class="msg"></p>
+  <form class="stack" id="f">
+    <label>Full name <input id="fullName" required></label>
+    <label>Email <input id="email" type="email" required></label>
+    <label>Username <input id="username" required minlength="3"></label>
+    <label>Password <input id="password" type="password" required minlength="6"></label>
+    <button type="submit">Create account</button>
+  </form>
+  <p style="margin-top:14px">Already registered? <a href="/login.html">Log in</a></p>
+</div>
+<script>
+document.getElementById("f").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  const g = id => document.getElementById(id).value.trim();
+  const body = { fullName: g("fullName"), email: g("email"), username: g("username"), password: document.getElementById("password").value };
+  const r = await fetch("/api/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (r.ok) { location.href = "/login.html?registered=true"; return; }
+  const d = await r.json().catch(() => ({}));
+  const m = document.getElementById("msg");
+  m.textContent = d.error || Object.values(d).join(", ") || "Could not register";
+  m.className = "msg error";
+});
+</script>
+</body>
+</html>
