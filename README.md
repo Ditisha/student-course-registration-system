@@ -61,7 +61,28 @@ Students create their own account from the sign up page.
 | POST / DELETE | `/api/enrollments/{courseId}` | Student | Register / drop |
 
 ## Screenshots
-_Add screenshots here._
+## API documentation (Swagger)
+Interactive API docs are available at http://localhost:8081/swagger-ui.html after logging in.
+
+## Screenshots
+
+### Login
+![Login page](screenshots/LoginPage.png)
+
+### Admin: courses with search, sorting and pagination
+![Admin courses](screenshots/AdminCourseTab.png)
+
+### Admin: students and their registered courses
+![Admin students](screenshots/AdminStudentTab.png)
+
+### Student: my registered courses
+![Student courses](screenshots/StudentMyCourseTab.png)
+
+### Swagger UI: all endpoints
+![Swagger APIs](screenshots/SwaggerAPIs.png)
+
+### Swagger UI: testing GET /api/courses
+![Swagger test](screenshots/swaggerPage.png)
 
 ## Future improvements
 - JWT authentication
